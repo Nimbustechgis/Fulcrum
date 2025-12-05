@@ -1,0 +1,42 @@
+//--------------------------------------------------
+// OCR AUTOMÁTICO DESDE FOTO
+//--------------------------------------------------
+ON('add-photo', 'foto_router', function (event) {
+
+  RECOGNIZETEXT({ photo_id: event.value.id }, function (error, result) {
+
+    if (error) {
+      console.error("OCR error:", error);
+      return;
+    }
+
+    let texto = result.text || "";
+    SETVALUE("texto_ocr", texto); // Guarda texto completo para referencia
+
+    //--------------------------------------------------
+    // 1. IMEI (15 dígitos)
+    //--------------------------------------------------
+    let imei = texto.match(/IMEI[:\s]*([0-9]{15})/i);
+    if (imei) SETVALUE("imei", imei[1]);
+
+    //--------------------------------------------------
+    // 2. MAC ADDRESS (MAC, MAC ID, MAC ADDRESS, etc.)
+    //--------------------------------------------------
+    let mac = texto.match(/MAC(?:[\s_\-]*ID|[\s_\-]*Address)?[:\s]*([A-F0-9:]{11,17})/i);
+    if (mac) SETVALUE("mac", mac[1]);
+
+    //--------------------------------------------------
+    // 3. SERIE (S/N, SN, Serial No, Serial #, etc.)
+    //--------------------------------------------------
+    let serie = texto.match(/(?:S\/N|SN|Serial\s*(?:No|#)?)[\s:]*([A-Z0-9\-]+)/i);
+    if (serie) SETVALUE("serie", serie[1]);
+
+    //--------------------------------------------------
+    // 4. MODELO
+    //--------------------------------------------------
+    let modelo = texto.match(/Model[:\s]*([A-Z0-9\-]+)/i);
+    if (modelo) SETVALUE("modelo", modelo[1]);
+
+  });
+
+});
