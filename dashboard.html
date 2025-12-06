@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard de Infraestructura del Agua</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"/>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: "Segoe UI", sans-serif;
+      background: #f4f6f8;
+    }
+
+    /* ---- HEADER ---- */
+    header {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.85);
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 1000;
+      backdrop-filter: blur(8px);
+    }
+    header img { height: 32px; }
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin: 0;
+    }
+
+    /* ---- LAYOUT ---- */
+    #container {
+      display: flex;
+      height: 100%;
+      width: 100%;
+    }
+    #map { flex: 3; height: 100%; z-index: 1; }
+    #panel {
+      flex: 1.2;
+      background: #ffffff;
+      border-left: 1px solid #ddd;
+      padding: 15px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -3px 0 8px rgba(0,0,0,0.05);
+    }
+    #panel h2 { font-size: 20px; color: #004AAD; margin-bottom: 10px; }
+    #panel h4 { font-size: 14px; color: #555; margin-top: 20px; margin-bottom: 8px; }
+    canvas {
+      width: 100% !important;
+      height: auto !important;
+      margin-top: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      border-radius: 8px;
+      background: #fafafa;
+      padding: 5px;
+    }
+
+    /* ---- RESPONSIVE ---- */
+    @media (max-width: 992px) {
+      #container { flex-direction: column; }
+      #map { height: 60vh; }
+      #panel {
+        height: 40vh;
+        border-left: none;
+        border-top: 1px solid #ddd;
+      }
+      header {
+        position: static;
+        transform: none;
+        justify-content: center;
+        border-radius: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+     /* ---- Cambiar url logo ---- */
+    <img src="https://mergin.nimbuscr.com/Nimbustechlogo.png" alt="Nimbus Logo" />
+    <h1>Field Service Telecom </h1>
+  </header>
+
+  <div id="container">
+    <div id="map"></div>
+    <div id="panel">
+      <h2>Dashboard</h2>
+      <h4>Estado de Infraestructura</h4>
+      <canvas id="estadoChart"></canvas>
+      <h4>Tipo de Infraestructura</h4>
+      <canvas id="tipoChart"></canvas>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    async function iniciarDashboard() {
+      const url = "https://web.fulcrumapp.com/shares/715c28fcb256d324.csv"; /* ---- cambiar url datashares ---- */
+      const resp = await fetch(url);
+      const csv = await resp.text();
+      const rows = csv.split("\n").map(r => r.split(","));
+      const headers = rows[0];
+
+      const latIdx = headers.indexOf("latitude");
+      const lonIdx = headers.indexOf("longitude");
+      const estadoIdx = headers.indexOf("estado");
+      const tipoIdx = headers.indexOf("modelo");
+      const lugarIdx = headers.indexOf("lugar");
+
+      const estadoConteo = {};
+      const tipoConteo = {};
+
+      const mapa = L.map('map').setView([10, -84], 8);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '© OpenStreetMap'
+      }).addTo(mapa);
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const lat = parseFloat(row[latIdx]);
+        const lon = parseFloat(row[lonIdx]);
+        const estado = row[estadoIdx] || "Sin dato";
+        const tipo = row[tipoIdx] || "Sin dato";
+        const lugar = row[lugarIdx] || "Ubicación no definida";
+
+        if (!isNaN(lat) && !isNaN(lon)) {
+          L.circleMarker([lat, lon], {
+            radius: 6,
+            color: "#007bff",
+            fillOpacity: 0.7
+          }).bindPopup(`<b>Lugar:</b> ${lugar}<br><b>Estado:</b> ${estado}<br><b>Tipo:</b> ${tipo}`).addTo(mapa);
+        }
+
+        estadoConteo[estado] = (estadoConteo[estado] || 0) + 1;
+        tipoConteo[tipo] = (tipoConteo[tipo] || 0) + 1;
+      }
+
+      // ---- Gráfico de barras ----
+      new Chart(document.getElementById("estadoChart"), {
+        type: "bar",
+        data: {
+          labels: Object.keys(estadoConteo),
+          datasets: [{
+            label: "Cantidad",
+            data: Object.values(estadoConteo),
+            backgroundColor: "rgba(0, 75, 173, 0.6)"
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+
+      // ---- Gráfico tipo donut estilo Power BI ----
+      new Chart(document.getElementById("tipoChart"), {
+        type: "doughnut",
+        data: {
+          labels: Object.keys(tipoConteo),
+          datasets: [{
+            data: Object.values(tipoConteo),
+            backgroundColor: [
+              "#0078D4", "#00A65A", "#FFB900", "#E81123", "#5C2D91", "#FF8C00"
+            ],
+            borderWidth: 0,
+            hoverOffset: 8
+          }]
+        },
+        options: {
+          cutout: "60%", // grosor tipo Power BI
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: {
+                boxWidth: 14,
+                color: "#333",
+                font: { size: 12 }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    iniciarDashboard();
+  </script>
+</body>
+</html>
